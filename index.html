@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jacobian</title>
+    <script src="js/math.min.js"></script>
+
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            border: 0;
+            overflow: hidden;
+            display: block;
+        }
+
+        .control {
+            font-size: 60px;
+            width: 55%;
+            font-family: Georgia, serif;
+            position: absolute;
+            left: 20px; bottom: 20px;
+            background-color: rgba(40, 38, 55, 0.9);
+            border-color: black;
+            border-style: solid;
+            border-radius: 20px 20px 20px 20px;
+            border-width: 2px;
+            padding-bottom: 50px;
+        }
+
+        .control input {
+            color: white;
+            text-align: center;
+            width: 300px;
+            background: none;
+            border-radius: 0;
+            border: none;
+            font-size: 32px;
+            border-bottom: 2px solid white;
+        }
+
+        .widget-title-j {
+            float: left;
+            margin-top: 30px;
+            margin-left: 30px;
+            display: flex;
+            align-items: center;
+        }
+        .widget-title-j:before {
+            content: 'J=[';
+            color: white;
+            font-size: 100px;
+            text-align: right;
+            padding-right: 10px;
+        }
+        .widget-title-j:after {
+            content: ']';
+            color: white;
+            font-size: 100px;
+            text-align: left;
+            padding-left: 10px;
+        }
+
+        .widget-title-f {
+            margin: 30px;
+            display: flex;
+            align-items: center;
+        }
+        .widget-title-f:before {
+            content: 'F=[';
+            color: white;
+            font-size: 100px;
+            text-align: right;
+            padding-right: 10px;
+        }
+        .widget-title-f:after {
+            content: ']';
+            color: white;
+            font-size: 100px;
+            text-align: left;
+        }
+
+        .widget-title-m {
+            float: left;
+            margin-top: 30px;
+            display: flex;
+            align-items: center;
+        }
+        .widget-title-m:before {
+            content: '=[';
+            color: white;
+            font-size: 100px;
+            text-align: right;
+            padding-right: 10px;
+        }
+        .widget-title-m:after {
+            content: ']=';
+            color: white;
+            font-size: 100px;
+            text-align: left;
+            padding-left: 10px;
+        }
+
+        .widget-title-r {
+            margin-top: 75px;
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" style="left: 0; top: 0; background: #22223b"></canvas>
+    <div class="control">
+        <div class="widget-title-f">
+            <table>
+                <tr>
+                    <td><input type="text" id="f1" value="x + cos(y)/2" onchange="updateEqs()"></td>
+                </tr>
+                <tr>
+                    <td><input type="text" id="f2" value="y + sin(y)/2" onchange="updateEqs()"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="widget-title-j">
+            <table id="jacobian_a" style="text-align: center; color: white; font-size: 30px; border-spacing: 10px; ">
+            </table>
+        </div>
+        <div class="widget-title-m">
+            <table id="jacobian_c" style="text-align: center; color: white; font-size: 30px; border-spacing: 10px; ">
+            </table>
+        </div>
+        <div class="widget-title-r" id="result"></div>
+    </div>
+
+<script>
+    var canvas = document.getElementById("canvas");
+    var context = canvas.getContext ("2d");
+
+    var nx = 20;
+    var ny = nx;
+
+    var mousePos = { x: 0, y: 0 };
+
+    var f1 = math.parse('x + cos(y)/2');
+    var f2 = math.parse('y + sin(y)/2');
+
+    var df1dx = math.derivative (f1, 'x');
+    var df1dy = math.derivative (f1, 'y');
+    var df2dx = math.derivative (f2, 'x');
+    var df2dy = math.derivative (f2, 'y');
+
+    var jacobian_a = document.getElementById('jacobian_a');
+    var jacobian_c = document.getElementById('jacobian_c');
+
+    function updateEqs() {
+        f1 = math.parse (document.getElementById('f1').value);
+        f2 = math.parse (document.getElementById('f2').value);
+
+        df1dx = math.derivative (f1, 'x');
+        df1dy = math.derivative (f1, 'y');
+        df2dx = math.derivative (f2, 'x');
+        df2dy = math.derivative (f2, 'y');
+
+        jacobian_a.innerHTML = "";
+
+        var row_1 = jacobian_a.insertRow();
+        var row_2 = jacobian_a.insertRow();
+
+        var cell_1 = row_1.insertCell(); cell_1.innerHTML = df1dx.toString();
+        var cell_2 = row_1.insertCell(); cell_2.innerHTML = df1dy.toString();
+
+        var cell_3 = row_2.insertCell(); cell_3.innerHTML = df2dx.toString();
+        var cell_4 = row_2.insertCell(); cell_4.innerHTML = df2dy.toString();
+
+        update();
+    }
+
+    updateEqs();
+
+    var x_max = 5; var x_min = -5;
+    var y_max = 5; var y_min = -5;
+
+    var dx = (x_max - x_min) / nx;
+    var dy = (y_max - y_min) / ny;
+
+    var coarse_level = 20;
+
+    function getMousePos(canvas, evt) {
+        var rect = canvas.getBoundingClientRect();
+        return {
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top
+        };
+    }
+
+    function updateMouse(evt) {
+        mousePos = getMousePos(canvas, evt);
+
+        jacobian_c.innerHTML = "";
+
+        var row_1 = jacobian_c.insertRow();
+        var row_2 = jacobian_c.insertRow();
+
+        var v1 = df1dx.eval({x: gxtl(mousePos.x), y: gytl(mousePos.y)});
+        var v2 = df1dy.eval({x: gxtl(mousePos.x), y: gytl(mousePos.y)});
+        var v3 = df2dx.eval({x: gxtl(mousePos.x), y: gytl(mousePos.y)});
+        var v4 = df2dy.eval({x: gxtl(mousePos.x), y: gytl(mousePos.y)});
+
+        var cell_1 = row_1.insertCell(); cell_1.innerHTML = v1.toFixed(4);
+        var cell_2 = row_1.insertCell(); cell_2.innerHTML = v2.toFixed(4);
+
+        var cell_3 = row_2.insertCell(); cell_3.innerHTML = v3.toFixed(4);
+        var cell_4 = row_2.insertCell(); cell_4.innerHTML = v4.toFixed(4);
+
+        document.getElementById('result').innerHTML = (v1 * v4 - v2 * v3).toFixed(2);
+
+        update();
+    }
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        if (canvas.width > canvas.height) {
+            var gdx = canvas.width / nx;
+            ny = canvas.height / gdx;
+            dy = (y_max - y_min) / ny;
+        }
+        else {
+            var gdy = canvas.height / ny;
+            nx = canvas.width / gdy;
+            dx = (x_max - x_min) / nx;
+        }
+
+        update();
+    }
+
+    function update() {
+        redraw();
+    }
+
+    function tr(val, in_min, in_max, out_min, out_max) {
+        return (val - 1.0 * in_min) * (1.0 * out_max - out_min) / (in_max - in_min) + out_min;
+    }
+
+    function lxtg(x) {
+        return tr(x, x_min, x_max, 0, canvas.width);
+    }
+
+    function lytg(y) {
+        return tr(y, y_min, y_max, 0, canvas.height);
+    }
+
+    function gxtl(x) {
+        return tr(x, 0, canvas.width, x_min, x_max);
+    }
+
+    function gytl(y) {
+        return tr(y, 0, canvas.height, y_min, y_max);
+    }
+
+    function redraw() {
+        // Clear
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        context.font = "12px Arial";
+        context.fillStyle = "white";
+
+        for (var x = 0; x < nx; ++x) {
+            context.fillText((x_min + x * dx).toFixed(3).toString(), lxtg(x_min + x * dx + dx / 6), lytg(-dy / 2));
+        }
+
+        // Axis
+        for (var y = 0; y < ny; ++y) {
+            if (((y_min + dy * y)/dy) % 2) {
+                context.strokeStyle = "#5a4e69";
+                context.lineWidth = 2;
+            }
+            else {
+                context.strokeStyle = "#4a4e69";
+                context.lineWidth = 1;
+            }
+            context.beginPath();
+            context.moveTo(lxtg(x_min), lytg(y_min + dy * y));
+            context.lineTo(lxtg(x_max), lytg(y_min + dy * y));
+            context.stroke();
+        }
+        for (var x = 0; x < nx; ++x) {
+            if (((x_min + dx * x)/dx) % 2) {
+                context.strokeStyle = "#5a4e69";
+                context.lineWidth = 2;
+            }
+            else {
+                context.strokeStyle = "#4a4e69";
+                context.lineWidth = 1;
+            }
+            context.beginPath();
+            context.moveTo(lxtg(x_min + dx * x), lytg(y_min));
+            context.lineTo(lxtg(x_min + dx * x), lytg(y_max));
+            context.stroke();
+        }
+
+        // Selection
+        var lx = Math.floor((gxtl(mousePos.x) - x_min)/dx);
+        var by = Math.floor((gytl(mousePos.y) - y_min)/dy);
+
+        context.strokeStyle = '#6a6e69';
+        context.lineWidth = 5;
+        context.beginPath();
+        context.rect(lxtg(x_min + lx * dx), lytg(y_min + by * dy), lxtg(x_min + dx), lytg(y_min + dy));
+        context.stroke();
+
+        // New axis
+        context.strokeStyle = "#c9ada7";
+        context.lineWidth = 2;
+        for (var x = 0; x < nx + 1; ++x) {
+
+            var x_1 = lxtg(f1.eval({x: x_min + x * dx, y: gytl(0)}));
+            var y_1 = lytg(f2.eval({x: x_min + x * dx, y: gytl(0)}));
+
+            var last_y = canvas.height;
+
+            context.beginPath();
+            context.moveTo(x_1, y_1);
+            for (var y = 1; y < last_y; y+=coarse_level) {
+                x_1 = lxtg(f1.eval({x: x_min + x * dx, y: gytl(y)}));
+                y_1 = lytg(f2.eval({x: x_min + x * dx, y: gytl(y)}));
+
+                context.lineTo(x_1, y_1);
+            }
+            x_1 = lxtg(f1.eval({x: x_min + x * dx, y: gytl(last_y)}));
+            y_1 = lytg(f2.eval({x: x_min + x * dx, y: gytl(last_y)}));
+            context.lineTo(x_1, y_1);
+            context.stroke();
+        }
+
+        for (var y = 0; y < ny + 1; ++y) {
+
+            var x_1 = lxtg(f1.eval({x: gxtl(0), y: y_min + y * dy}));
+            var y_1 = lytg(f2.eval({x: gxtl(0), y: y_min + y * dy}));
+
+            var last_x = canvas.width;
+
+            context.beginPath();
+            context.moveTo(x_1, y_1);
+            for (var x = 1; x < last_x; x+=coarse_level) {
+                x_1 = lxtg(f1.eval({x: gxtl(x), y: y_min + y * dy}));
+                y_1 = lytg(f2.eval({x: gxtl(x), y: y_min + y * dy}));
+
+                context.lineTo(x_1, y_1);
+            }
+            x_1 = lxtg(f1.eval({x: gxtl(last_x), y: y_min + y * dy}));
+            y_1 = lytg(f2.eval({x: gxtl(last_x), y: y_min + y * dy}));
+            context.lineTo(x_1, y_1);
+            context.stroke();
+        }
+
+        // Selection
+        context.strokeStyle = "#f4a261";// '#f2e9e4';
+        context.lineWidth = 5;
+        for (var y = by; y <= by + 1; ++y) {
+            var x_1 = lxtg(f1.eval({x: x_min + lx * dx, y: y_min + y * dy}));
+            var y_1 = lytg(f2.eval({x: x_min + lx * dx, y: y_min + y * dy}));
+
+            var last_x = lxtg(x_min + lx * dx) + lxtg(x_min + dx);
+
+            context.beginPath();
+            context.moveTo(x_1, y_1);
+            for (var x = lxtg(x_min + lx * dx); x <= last_x; x+=coarse_level) {
+                x_1 = lxtg(f1.eval({x: gxtl(x), y: y_min + y * dy}));
+                y_1 = lytg(f2.eval({x: gxtl(x), y: y_min + y * dy}));
+
+                context.lineTo(x_1, y_1);
+            }
+            x_1 = lxtg(f1.eval({x: gxtl(last_x), y: y_min + y * dy}));
+            y_1 = lytg(f2.eval({x: gxtl(last_x), y: y_min + y * dy}));
+
+            context.lineTo(x_1, y_1);
+            context.stroke();
+        }
+
+        for (var x = lx; x <= lx + 1; ++x) {
+            var x_1 = lxtg(f1.eval({x: x_min + x * dx, y: y_min + by * dy}));
+            var y_1 = lytg(f2.eval({x: x_min + x * dx, y: y_min + by * dy}));
+
+            var last_y = lytg(y_min + by * dy) + lytg(y_min + dy);
+
+            context.beginPath();
+            context.moveTo(x_1, y_1);
+            for (var y = lytg(y_min + by * dy); y < last_y; y+=coarse_level) {
+                x_1 = lxtg(f1.eval({x: x_min + x * dx, y: gytl(y)}));
+                y_1 = lytg(f2.eval({x: x_min + x * dx, y: gytl(y)}));
+
+                context.lineTo(x_1, y_1);
+            }
+            x_1 = lxtg(f1.eval({x: x_min + x * dx, y: gytl(last_y)}));
+            y_1 = lytg(f2.eval({x: x_min + x * dx, y: gytl(last_y)}));
+            context.stroke();
+        }
+    }
+
+    window.addEventListener('resize', resizeCanvas, false);
+    canvas.addEventListener('mousemove', updateMouse);
+    canvas.addEventListener('wheel', function (evt) {
+        y_min += evt.deltaY > 0 ? dy : -dy;
+        y_max += evt.deltaY > 0 ? dy : -dy;
+
+        redraw();
+    });
+    resizeCanvas(); // Init canvas sizes
+</script>
+</body>
+</html>
